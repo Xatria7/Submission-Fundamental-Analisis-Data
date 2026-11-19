@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -15,7 +16,9 @@ st.set_page_config(
 
 
 @st.cache_data
-def load_data(file_path: str = "main_data.csv") -> pd.DataFrame:
+def load_data() -> pd.DataFrame:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_dir, "main_data.csv")
     df = pd.read_csv(file_path)
     datetime_cols = [
         "order_purchase_timestamp",
@@ -100,7 +103,7 @@ def create_rfm_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # --- LOAD DATA ---
-all_df = load_data("main_data.csv")
+all_df = load_data()
 
 # --- SIDEBAR FILTER ---
 with st.sidebar:
