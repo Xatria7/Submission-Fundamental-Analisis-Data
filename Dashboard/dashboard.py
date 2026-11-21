@@ -172,7 +172,7 @@ with col4:
 st.divider()
 
 # --- BAGIAN 1: TREN BULANAN & PERFORMA KATEGORI ---
-st.subheader("1. Tren Pendapatan Bulanan & Performa Kategori Produk")
+st.subheader("1. Tren Pertumbuhan Pesanan, Revenue Bulanan, & Performa Kategori Produk")
 
 monthly_df = create_monthly_trend_df(main_df)
 category_df = create_category_perf_df(main_df)
@@ -248,16 +248,20 @@ with tab2:
 
 st.divider()
 
-# --- BAGIAN 2: DAMPAK KETERLAMBATAN PENGIRIMAN ---
-st.subheader("2. Dampak Keterlambatan Pengiriman terhadap Kepuasan Pelanggan")
+# --- BAGIAN 2: HUBUNGAN KETERLAMBATAN PENGIRIMAN TERHADAP SKOR ULASAN ---
+st.subheader("2. Hubungan Keterlambatan Pengiriman terhadap Skor Ulasan Pelanggan per Negara Bagian")
 
 delivery_rev_df = create_delivery_review_df(main_df)
 state_deliv_df = create_state_delivery_df(main_df)
 
-col_left, col_right = st.columns(2)
+min_orders_filter = 100 if len(state_deliv_df[state_deliv_df["total_orders"] >= 100]) > 0 else 1
+state_filtered = state_deliv_df[state_deliv_df["total_orders"] >= min_orders_filter].copy()
+top_states = state_filtered.sort_values(by="late_rate", ascending=False).head(10)
+
+col_left, col_mid, col_right = st.columns(3)
 
 with col_left:
-    fig, ax = plt.subplots(figsize=(7, 5))
+    fig, ax = plt.subplots(figsize=(6, 5))
     order_list = [s for s in ["On Time", "Late"] if s in delivery_rev_df["delivery_status"].values]
     plot_deliv = delivery_rev_df.set_index("delivery_status").loc[order_list].reset_index()
     palette_map = {"On Time": "#2ca02c", "Late": "#d62728"}
@@ -267,7 +271,7 @@ with col_left:
     )
     if ax.get_legend():
         ax.get_legend().remove()
-    ax.set_title("Rata-rata Skor Ulasan: On Time vs Late", fontsize=12, fontweight="bold")
+    ax.set_title("Rata-rata Skor Ulasan:\nOn Time vs Late", fontsize=11, fontweight="bold")
     ax.set_xlabel("Status Pengiriman")
     ax.set_ylabel("Rata-rata Review Score (1-5)")
     ax.set_ylim(0, 5.2)
@@ -280,14 +284,31 @@ with col_left:
     st.pyplot(fig)
     plt.close(fig)
 
+with col_mid:
+    fig, ax = plt.subplots(figsize=(6, 5))
+    if len(state_filtered) >= 2 and state_filtered["late_rate"].nunique() > 1:
+        corr_r = state_filtered["late_rate"].corr(state_filtered["avg_review_score"], method="pearson")
+        sns.regplot(
+            data=state_filtered, x="late_rate", y="avg_review_score",
+            scatter_kws={"s": 60, "alpha": 0.8, "color": "#1f77b4"},
+            line_kws={"color": "#d62728", "linewidth": 2},
+            ax=ax
+        )
+        for _, row in state_filtered.iterrows():
+            if row["late_rate"] > 15 or row["customer_state"] in ["SP", "RJ", "MG"]:
+                ax.text(row["late_rate"] + 0.3, row["avg_review_score"], row["customer_state"], fontsize=8.5, fontweight="bold")
+        ax.set_title(f"Korelasi Keterlambatan vs Skor Ulasan\nper State (Pearson r = {corr_r:.2f})", fontsize=11, fontweight="bold")
+    else:
+        sns.scatterplot(data=state_filtered, x="late_rate", y="avg_review_score", s=80, color="#1f77b4", ax=ax)
+        ax.set_title("Keterlambatan vs Skor Ulasan per State", fontsize=11, fontweight="bold")
+    ax.set_xlabel("Persentase Terlambat (%)")
+    ax.set_ylabel("Rata-rata Review Score")
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
+
 with col_right:
-    min_orders_filter = 100 if len(state_deliv_df[state_deliv_df["total_orders"] >= 100]) > 0 else 1
-    top_states = (
-        state_deliv_df[state_deliv_df["total_orders"] >= min_orders_filter]
-        .sort_values(by="late_rate", ascending=False)
-        .head(10)
-    )
-    fig, ax = plt.subplots(figsize=(7, 5))
+    fig, ax = plt.subplots(figsize=(6, 5))
     state_colors = ["#d62728" if i == 0 else "#f2a6a6" for i in range(len(top_states))]
     sns.barplot(
         data=top_states, x="late_rate", y="customer_state",
@@ -295,7 +316,7 @@ with col_right:
     )
     if ax.get_legend():
         ax.get_legend().remove()
-    ax.set_title(f"Top 10 State Keterlambatan Tertinggi (Min. {min_orders_filter} Pesanan)", fontsize=12, fontweight="bold")
+    ax.set_title(f"Top 10 State Keterlambatan Tertinggi\n(Min. {min_orders_filter} Pesanan)", fontsize=11, fontweight="bold")
     ax.set_xlabel("Persentase Terlambat (%)")
     ax.set_ylabel("Customer State")
     ax.set_xlim(0, top_states["late_rate"].max() * 1.18)
